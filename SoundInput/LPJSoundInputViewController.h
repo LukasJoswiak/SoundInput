@@ -21,7 +21,6 @@
 @property (nonatomic, weak) IBOutlet UIButton *recordPauseButton;
 @property (nonatomic, weak) IBOutlet UIButton *stopButton;
 @property (nonatomic, weak) IBOutlet UIButton *playButton;
-@property (nonatomic, weak) IBOutlet UIButton *saveData;
 @property (weak, nonatomic) IBOutlet UIButton *startTestButton;
 @property (weak, nonatomic) IBOutlet UIButton *stopTestButton;
 

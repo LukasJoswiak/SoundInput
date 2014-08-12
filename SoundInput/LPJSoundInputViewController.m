@@ -174,11 +174,6 @@
     }
 }
 
-- (IBAction)saveDataTapped:(id)sender
-{
-    [self saveMaxData];
-}
-
 - (IBAction)startTestTapped:(id)sender
 {
     self.startTestButton.enabled = NO;

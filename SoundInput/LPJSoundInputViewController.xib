@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="5056" systemVersion="13E28" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="5056" systemVersion="14A238x" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES">
     <dependencies>
         <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="3733"/>
     </dependencies>
@@ -9,7 +9,6 @@
                 <outlet property="audioPlot" destination="KzG-rH-GJR" id="JzB-Ud-vJz"/>
                 <outlet property="playButton" destination="xHu-1b-AZG" id="WEm-ph-H5D"/>
                 <outlet property="recordPauseButton" destination="zBV-OT-LYf" id="N8k-j4-tR7"/>
-                <outlet property="saveData" destination="OhF-5P-l6J" id="h2P-wi-0dn"/>
                 <outlet property="startTestButton" destination="gpx-Sy-o7P" id="ThU-oA-EAf"/>
                 <outlet property="stopButton" destination="b2I-Wc-m0H" id="6NP-6P-pf4"/>
                 <outlet property="stopTestButton" destination="b2I-Wc-m0H" id="sIH-Op-QWK"/>
@@ -56,16 +55,6 @@
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
                     <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="calibratedWhite"/>
                 </view>
-                <button opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="OhF-5P-l6J">
-                    <rect key="frame" x="125" y="168" width="71" height="30"/>
-                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
-                    <state key="normal" title="Save Data">
-                        <color key="titleShadowColor" white="0.5" alpha="1" colorSpace="calibratedWhite"/>
-                    </state>
-                    <connections>
-                        <action selector="saveDataTapped:" destination="-1" eventType="touchUpInside" id="xiJ-5z-kME"/>
-                    </connections>
-                </button>
                 <button opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="gpx-Sy-o7P">
                     <rect key="frame" x="93" y="269" width="33" height="30"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>

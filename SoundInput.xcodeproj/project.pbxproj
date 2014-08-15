@@ -39,6 +39,13 @@
 		93AD016119881164000644BE /* SoundInputTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 93AD016019881164000644BE /* SoundInputTests.m */; };
 		93AD016D198811A4000644BE /* LPJSoundInputViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 93AD016B198811A4000644BE /* LPJSoundInputViewController.m */; };
 		93AD016E198811A4000644BE /* LPJSoundInputViewController.xib in Resources */ = {isa = PBXBuildFile; fileRef = 93AD016C198811A4000644BE /* LPJSoundInputViewController.xib */; };
+		93B8E201199D2E8A002A4086 /* Dropbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 93B8E200199D2E8A002A4086 /* Dropbox.framework */; };
+		93B8E203199D2EB1002A4086 /* CFNetwork.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 93B8E202199D2EB1002A4086 /* CFNetwork.framework */; };
+		93B8E205199D2EB7002A4086 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 93B8E204199D2EB7002A4086 /* Security.framework */; };
+		93B8E207199D2EC8002A4086 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 93B8E206199D2EC8002A4086 /* SystemConfiguration.framework */; };
+		93B8E209199D2ECE002A4086 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 93B8E208199D2ECE002A4086 /* QuartzCore.framework */; };
+		93B8E20B199D2EDF002A4086 /* libc++.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 93B8E20A199D2EDF002A4086 /* libc++.dylib */; };
+		93B8E20D199D2EE8002A4086 /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 93B8E20C199D2EE8002A4086 /* libz.dylib */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -101,6 +108,13 @@
 		93AD016A198811A4000644BE /* LPJSoundInputViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = LPJSoundInputViewController.h; sourceTree = "<group>"; };
 		93AD016B198811A4000644BE /* LPJSoundInputViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = LPJSoundInputViewController.m; sourceTree = "<group>"; };
 		93AD016C198811A4000644BE /* LPJSoundInputViewController.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = LPJSoundInputViewController.xib; sourceTree = "<group>"; };
+		93B8E200199D2E8A002A4086 /* Dropbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = Dropbox.framework; sourceTree = "<group>"; };
+		93B8E202199D2EB1002A4086 /* CFNetwork.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CFNetwork.framework; path = System/Library/Frameworks/CFNetwork.framework; sourceTree = SDKROOT; };
+		93B8E204199D2EB7002A4086 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		93B8E206199D2EC8002A4086 /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
+		93B8E208199D2ECE002A4086 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		93B8E20A199D2EDF002A4086 /* libc++.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = "libc++.dylib"; path = "usr/lib/libc++.dylib"; sourceTree = SDKROOT; };
+		93B8E20C199D2EE8002A4086 /* libz.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.dylib; path = usr/lib/libz.dylib; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -108,9 +122,16 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				93B8E20D199D2EE8002A4086 /* libz.dylib in Frameworks */,
+				93B8E20B199D2EDF002A4086 /* libc++.dylib in Frameworks */,
+				93B8E209199D2ECE002A4086 /* QuartzCore.framework in Frameworks */,
+				93B8E207199D2EC8002A4086 /* SystemConfiguration.framework in Frameworks */,
+				93B8E205199D2EB7002A4086 /* Security.framework in Frameworks */,
+				93B8E203199D2EB1002A4086 /* CFNetwork.framework in Frameworks */,
 				9395952B198991A70066A6C2 /* Accelerate.framework in Frameworks */,
 				9307882D19884A9F00782488 /* GLKit.framework in Frameworks */,
 				9307882B19884A9700782488 /* AudioToolbox.framework in Frameworks */,
+				93B8E201199D2E8A002A4086 /* Dropbox.framework in Frameworks */,
 				9307882919883CA700782488 /* AVFoundation.framework in Frameworks */,
 				93AD013E19881164000644BE /* CoreGraphics.framework in Frameworks */,
 				93AD014019881164000644BE /* UIKit.framework in Frameworks */,
@@ -194,6 +215,13 @@
 		93AD013A19881164000644BE /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				93B8E20C199D2EE8002A4086 /* libz.dylib */,
+				93B8E20A199D2EDF002A4086 /* libc++.dylib */,
+				93B8E208199D2ECE002A4086 /* QuartzCore.framework */,
+				93B8E206199D2EC8002A4086 /* SystemConfiguration.framework */,
+				93B8E204199D2EB7002A4086 /* Security.framework */,
+				93B8E202199D2EB1002A4086 /* CFNetwork.framework */,
+				93B8E200199D2E8A002A4086 /* Dropbox.framework */,
 				9395952A198991A70066A6C2 /* Accelerate.framework */,
 				9307882C19884A9F00782488 /* GLKit.framework */,
 				9307882A19884A9700782488 /* AudioToolbox.framework */,

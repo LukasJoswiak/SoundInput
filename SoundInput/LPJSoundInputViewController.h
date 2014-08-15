@@ -12,11 +12,14 @@
 #import <GLKit/GLKit.h>
 #import <Accelerate/Accelerate.h>
 #import "EZAudio.h"
+#import <Dropbox/Dropbox.h>
 
 @interface LPJSoundInputViewController : UIViewController <AVAudioRecorderDelegate, AVAudioPlayerDelegate, EZMicrophoneDelegate>
 
 @property (nonatomic, strong) AVAudioRecorder *audioRecorder;
 @property (nonatomic, strong) AVAudioPlayer *audioPlayer;
+
+@property (nonatomic, weak) IBOutlet UIWebView *webView;
 
 @property (nonatomic, weak) IBOutlet UIButton *recordPauseButton;
 @property (nonatomic, weak) IBOutlet UIButton *stopButton;

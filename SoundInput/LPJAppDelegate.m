@@ -6,6 +6,7 @@
 //  Copyright (c) 2014 Lukas Joswiak. All rights reserved.
 //
 
+#import <Dropbox/Dropbox.h>
 #import "LPJAppDelegate.h"
 #import "LPJSoundInputViewController.h"
 
@@ -21,6 +22,10 @@
     
     self.window.backgroundColor = [UIColor whiteColor];
     [self.window makeKeyAndVisible];
+    
+    DBAccountManager *accountManager = [[DBAccountManager alloc] initWithAppKey:@"jfc3geebawx9ke8" secret:@"sfy1idyval82svw"];
+    [DBAccountManager setSharedManager:accountManager];
+    
     return YES;
 }
 
@@ -49,6 +54,18 @@
 - (void)applicationWillTerminate:(UIApplication *)application
 {
     // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
+}
+
+- (BOOL)application:(UIApplication *)application openURL:(NSURL *)url sourceApplication:(NSString *)sourceApplication annotation:(id)annotation
+{
+    DBAccount *account = [[DBAccountManager sharedManager] handleOpenURL:url];
+    
+    if (account) {
+        NSLog(@"App linked successfully.");
+        return YES;
+    }
+    
+    return NO;
 }
 
 @end

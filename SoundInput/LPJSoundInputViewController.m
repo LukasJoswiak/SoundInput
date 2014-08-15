@@ -16,6 +16,11 @@
 }
 
 @property (nonatomic, strong) NSString *dataPath;
+@property (nonatomic) BOOL isPhone;
+@property (nonatomic) int counter;
+
+@property (nonatomic, strong) DBAccount *account;
+@property (nonatomic, strong) DBFilesystem *filesystem;
 
 @end
 
@@ -25,6 +30,8 @@
 {
     [super viewDidLoad];
     
+    self.counter = 0;
+    
     self.isRecording = NO;
     self.stopTestButton.enabled = NO;
     
@@ -32,19 +39,20 @@
     self.maxData = [[NSMutableString alloc] init];
     self.magValues = [[NSMutableDictionary alloc] init];
     
+    [self.webView loadRequest:[[NSURLRequest alloc] initWithURL:[NSURL URLWithString:@"https://lukasjoswiak.com/dropbox/"]]];
+    
 #if TARGET_IPHONE_SIMULATOR
-    self.dataPath = @"/Users/lukasjoswiak/Dropbox/public/data.csv";
+    self.dataPath = @"/Users/lukasjoswiak/Dropbox/Apps/RealTimeGraph/data.csv";
+    self.isPhone = NO;
 #else
     self.dataPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES)[0] stringByAppendingString:@"/data.csv"];
+    self.isPhone = YES;
 #endif
     
     if (![[NSFileManager defaultManager] fileExistsAtPath:self.dataPath]) {
         NSLog(@"Creating file");
         [[NSFileManager defaultManager] createFileAtPath:self.dataPath contents:nil attributes:nil];
     }
-    
-    // Clear file
-    [@" " writeToFile:self.dataPath atomically:NO encoding:NSUTF8StringEncoding error:nil];
 
     [self.stopButton setEnabled:NO];
     [self.playButton setEnabled:NO];
@@ -102,7 +110,7 @@
                           withBufferSize:bufferSize]; */
         
         // Setup the FFT if it's not already setup
-        if ( !_isFFTSetup ){
+        if (!_isFFTSetup){
             [self createFFTWithBufferSize:bufferSize withAudioData:buffer[0]];
             _isFFTSetup = YES;
         }
@@ -129,6 +137,16 @@
     //NSLog(@"%.6f", max);
     [self.bufferData removeAllObjects];
      */
+}
+
+- (IBAction)didPressLink:(id)sender
+{
+    [[DBAccountManager sharedManager] linkFromController:self];
+}
+
+- (IBAction)reloadTapped:(id)sender
+{
+    [self.webView reload];
 }
 
 - (IBAction)recordPauseTapped:(id)sender
@@ -176,6 +194,9 @@
 
 - (IBAction)startTestTapped:(id)sender
 {
+    self.counter = 0;
+    [self.maxData setString:@""];
+    
     self.startTestButton.enabled = NO;
     self.stopTestButton.enabled = YES;
     self.isRecording = YES;
@@ -194,8 +215,31 @@
 {
     NSLog(@"Max data: %@", self.maxData);
     NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:self.dataPath];
-    [handle seekToEndOfFile];
-    [handle writeData:[self.maxData dataUsingEncoding:NSUTF8StringEncoding]];
+    //[handle seekToEndOfFile];
+    [handle truncateFileAtOffset:0];
+    
+    if (self.isPhone) {
+        if (!self.account) {
+            NSLog(@"Account: %@", self.account);
+            self.account = [[DBAccountManager sharedManager] linkedAccount];
+            
+            self.filesystem = [[DBFilesystem alloc] initWithAccount:self.account];
+            [DBFilesystem setSharedFilesystem:self.filesystem];
+        }
+        
+        DBPath *path = [[DBPath root] childPath:@"data.csv"];
+        DBFileInfo *info = [[DBFilesystem sharedFilesystem] fileInfoForPath:path error:nil];
+        
+        if (!info) {
+            DBFile *file = [[DBFilesystem sharedFilesystem] createFile:path error:nil];
+            [file writeString:self.maxData error:nil];
+        } else {
+            DBFile *file = [[DBFilesystem sharedFilesystem] openFile:path error:nil];
+            [file writeString:self.maxData error:nil];
+        }
+    } else {
+        [handle writeData:[self.maxData dataUsingEncoding:NSUTF8StringEncoding]];
+    }
     [handle closeFile];
 }
 
@@ -292,7 +336,10 @@
     
     if (self.isRecording) {
         NSLog(@"Max freq: %f", maxFreq);
-        [self.maxData appendString:[NSString stringWithFormat:@"%.2f,", maxFreq * (22050 / 256)]];
+        if (maxFreq * (22050 / 256) > 650) {
+            [self.maxData appendString:[NSString stringWithFormat:@"%d,%.2f\n", self.counter, maxFreq * (22050 / 256)]];
+            self.counter++;
+        }
     }
         
     for(int i=0; i<nOver2; i++) {

@@ -18,6 +18,7 @@
 @property (nonatomic, strong) NSString *dataPath;
 @property (nonatomic) BOOL isPhone;
 @property (nonatomic) int counter;
+@property (nonatomic, strong) NSURL *soundFileURL;
 
 @property (nonatomic, strong) DBAccount *account;
 @property (nonatomic, strong) DBFilesystem *filesystem;
@@ -65,7 +66,7 @@
     
     NSString *soundFilePath = [docsDir stringByAppendingString:@"/sound.caf"];
         
-    NSURL *soundFileURL = [NSURL fileURLWithPath:soundFilePath];
+    self.soundFileURL = [NSURL fileURLWithPath:soundFilePath];
     
     NSDictionary *recordSettings = [NSDictionary dictionaryWithObjectsAndKeys:
                                     [NSNumber numberWithInt:AVAudioQualityMedium], AVEncoderAudioQualityKey,
@@ -79,7 +80,7 @@
     [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord error:nil];
     [audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:nil];
     
-    self.audioRecorder = [[AVAudioRecorder alloc] initWithURL:soundFileURL settings:recordSettings error:&error];
+    self.audioRecorder = [[AVAudioRecorder alloc] initWithURL:self.soundFileURL settings:recordSettings error:&error];
     
     if (error) {
         NSLog(@"Error: %@", [error localizedDescription]);
@@ -196,6 +197,9 @@
 {
     self.counter = 0;
     [self.maxData setString:@""];
+    if (!self.audioRecorder.recording) {
+        [self.audioRecorder record];
+    }
     
     self.startTestButton.enabled = NO;
     self.stopTestButton.enabled = YES;
@@ -207,6 +211,7 @@
     self.startTestButton.enabled = YES;
     self.stopTestButton.enabled = NO;
     self.isRecording = NO;
+    [self.audioRecorder stop];
     
     [self saveMaxData];
 }
@@ -230,12 +235,23 @@
         DBPath *path = [[DBPath root] childPath:@"data.csv"];
         DBFileInfo *info = [[DBFilesystem sharedFilesystem] fileInfoForPath:path error:nil];
         
+        DBPath *soundPath = [[DBPath root] childPath:@"sound.caf"];
+        DBFileInfo *soundInfo = [[DBFilesystem sharedFilesystem] fileInfoForPath:soundPath error:nil];
+        
         if (!info) {
             DBFile *file = [[DBFilesystem sharedFilesystem] createFile:path error:nil];
             [file writeString:self.maxData error:nil];
         } else {
             DBFile *file = [[DBFilesystem sharedFilesystem] openFile:path error:nil];
             [file writeString:self.maxData error:nil];
+        }
+        
+        if (!soundInfo) {
+            DBFile *soundFile = [[DBFilesystem sharedFilesystem] createFile:soundPath error:nil];
+            [soundFile writeData:[NSData dataWithContentsOfURL:self.soundFileURL] error:nil];
+        } else {
+            DBFile *soundFile = [[DBFilesystem sharedFilesystem] openFile:soundPath error:nil];
+            [soundFile writeData:[NSData dataWithContentsOfURL:self.soundFileURL] error:nil];
         }
     } else {
         [handle writeData:[self.maxData dataUsingEncoding:NSUTF8StringEncoding]];

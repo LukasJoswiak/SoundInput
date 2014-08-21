@@ -7,6 +7,8 @@
 //
 
 #import "LPJSoundInputViewController.h"
+#import "LPJTimer.h"
+#import "LPJSoundAnalysis.h"
 
 @interface LPJSoundInputViewController () {
     COMPLEX_SPLIT _A;
@@ -18,10 +20,16 @@
 @property (nonatomic, strong) NSString *dataPath;
 @property (nonatomic) BOOL isPhone;
 @property (nonatomic) int counter;
+@property (nonatomic, strong) NSString *soundFilePath;
 @property (nonatomic, strong) NSURL *soundFileURL;
+@property (nonatomic) BOOL eof;
+
+@property (nonatomic, strong) LPJTimer *timer;
 
 @property (nonatomic, strong) DBAccount *account;
 @property (nonatomic, strong) DBFilesystem *filesystem;
+
+@property (nonatomic, strong) LPJSoundAnalysis *soundAnalysis;
 
 @end
 
@@ -31,6 +39,11 @@
 {
     [super viewDidLoad];
     
+    self.soundAnalysis = [[LPJSoundAnalysis alloc] init];
+    
+    self.timer = [[LPJTimer alloc] init];
+    self.timeLabel.text = @"";
+
     self.counter = 0;
     
     self.isRecording = NO;
@@ -39,6 +52,7 @@
     self.bufferData = [[NSMutableArray alloc] init];
     self.maxData = [[NSMutableString alloc] init];
     self.magValues = [[NSMutableDictionary alloc] init];
+    self.maxDataArray = [[NSMutableArray alloc] init];
     
     [self.webView loadRequest:[[NSURLRequest alloc] initWithURL:[NSURL URLWithString:@"https://lukasjoswiak.com/dropbox/"]]];
     
@@ -64,9 +78,9 @@
     dirPaths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
     docsDir = dirPaths[0];
     
-    NSString *soundFilePath = [docsDir stringByAppendingString:@"/sound.caf"];
-        
-    self.soundFileURL = [NSURL fileURLWithPath:soundFilePath];
+    self.soundFilePath = [docsDir stringByAppendingString:@"/sound.caf"];
+    
+    self.soundFileURL = [NSURL fileURLWithPath:self.soundFilePath];
     
     NSDictionary *recordSettings = [NSDictionary dictionaryWithObjectsAndKeys:
                                     [NSNumber numberWithInt:AVAudioQualityMedium], AVEncoderAudioQualityKey,
@@ -85,18 +99,20 @@
     if (error) {
         NSLog(@"Error: %@", [error localizedDescription]);
     } else {
-        [self.audioRecorder prepareToRecord];
+        //[self.audioRecorder prepareToRecord];
     }
     
     self.microphone = [EZMicrophone microphoneWithDelegate:self startsImmediately:YES];
-    //[self.microphone startFetchingAudio];
     
     self.audioPlot.backgroundColor = [UIColor colorWithRed:0.4 green:0.349 blue:0.7 alpha:1];
     self.audioPlot.plotType = EZPlotTypeBuffer;
     self.audioPlot.shouldFill = YES;
     self.audioPlot.shouldMirror = YES;
+
+    [self openFilePathWithFileURL:self.soundFileURL];
 }
 
+// Called when microphone is receiving audio
 - (void)microphone:(EZMicrophone *)microphone hasAudioReceived:(float **)buffer withBufferSize:(UInt32)bufferSize withNumberOfChannels:(UInt32)numberOfChannels
 {
     /*
@@ -105,11 +121,11 @@
     });
      */
     
+
     dispatch_async(dispatch_get_main_queue(), ^{
         // Update time domain plot
         /* [self.audioPlotTime updateBuffer:buffer[0]
                           withBufferSize:bufferSize]; */
-        
         // Setup the FFT if it's not already setup
         if (!_isFFTSetup){
             [self createFFTWithBufferSize:bufferSize withAudioData:buffer[0]];
@@ -119,25 +135,60 @@
         // Get the FFT data
         // buffer[0] accesses the left channel is system is stereo
         [self updateFFTWithBufferSize:bufferSize withAudioData:buffer[0]];
-        
-        /*
-        if ([self.bufferData count] < 7) {
-            [self.bufferData addObject:[NSString stringWithFormat:@"%.6f", *buffer[0]]];
-        } else {
-            [self printBuffer];
-        }
-         */
     });
 }
 
-- (void)printBuffer
+- (void)openFilePathWithFileURL:(NSURL *)url
 {
-    /*
-    float max = [[self.bufferData valueForKeyPath:@"@max.floatValue"] floatValue];
-    [self.maxData appendString:[NSString stringWithFormat:@"%.6f,", max]];
-    //NSLog(@"%.6f", max);
-    [self.bufferData removeAllObjects];
-     */
+    if (![[NSFileManager defaultManager] fileExistsAtPath:self.soundFilePath]) {
+        self.playRecordingButton.enabled = NO;
+        return;
+    }
+    
+    // Stop playback
+    [[EZOutput sharedOutput] stopPlayback];
+    
+    self.audioFile = [EZAudioFile audioFileWithURL:url];
+    self.audioFile.audioFileDelegate = self;
+    self.eof = NO;
+    
+    // Set the client format from the EZAudioFile on the output
+    [[EZOutput sharedOutput] setAudioStreamBasicDescription:self.audioFile.clientFormat];
+    
+    // Plot the whole waveform
+    self.audioPlot.plotType = EZPlotTypeBuffer;
+    self.audioPlot.shouldFill = YES;
+    self.audioPlot.shouldMirror = YES;
+    NSLog(@"Seconds: %.2f", self.audioFile.totalDuration);
+    [self.audioFile getWaveformDataWithCompletionBlock:^(float *waveformData, UInt32 length) {
+        [self.audioPlot updateBuffer:waveformData withBufferSize:length];
+    }];
+}
+
+// EZAudioFileDelegate
+- (void)audioFile:(EZAudioFile *)audioFile readAudio:(float **)buffer withBufferSize:(UInt32)bufferSize withNumberOfChannels:(UInt32)numberOfChannels
+{
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self.audioPlot updateBuffer:buffer[0] withBufferSize:bufferSize];
+    });
+}
+
+
+// EZOutputDataSource
+- (void)output:(EZOutput *)output shouldFillAudioBufferList:(AudioBufferList *)audioBufferList withNumberOfFrames:(UInt32)frames
+{
+    if (self.audioFile) {
+        UInt32 bufferSize;
+        [self.audioFile readFrames:frames audioBufferList:audioBufferList bufferSize:&bufferSize eof:&_eof];
+        
+        if (_eof) {
+            [[EZOutput sharedOutput] stopPlayback];
+            [self.playRecordingButton setTitle:@"Play Recording" forState:UIControlStateNormal];
+            [self.audioFile seekToFrame:0];
+            
+            [self saveMaxData];
+        }
+    }
 }
 
 - (IBAction)didPressLink:(id)sender
@@ -195,8 +246,8 @@
 
 - (IBAction)startTestTapped:(id)sender
 {
-    self.counter = 0;
-    [self.maxData setString:@""];
+    [self.timer startTimer];
+    
     if (!self.audioRecorder.recording) {
         [self.audioRecorder record];
     }
@@ -211,21 +262,105 @@
     self.startTestButton.enabled = YES;
     self.stopTestButton.enabled = NO;
     self.isRecording = NO;
+    [self.timer stopTimer];
     [self.audioRecorder stop];
+    
+    self.timeLabel.text = [NSString stringWithFormat:@"%f sec", [self.timer timeElapsedInSeconds]];
     
     [self saveMaxData];
 }
 
+- (IBAction)toggleRecordingTapped:(id)sender
+{
+    if ([[EZOutput sharedOutput] isPlaying]) {
+        [sender setTitle:@"Play Recording" forState:UIControlStateNormal];
+        [EZOutput sharedOutput].outputDataSource = nil;
+        [[EZOutput sharedOutput] stopPlayback];
+        
+        [self saveMaxData];
+    } else {
+        [sender setTitle:@"Stop Recording" forState:UIControlStateNormal];
+        [EZOutput sharedOutput].outputDataSource = self;
+        [[EZOutput sharedOutput] startPlayback];
+    }
+}
+
+- (NSMutableArray *)movingAverage:(int)iterations
+{
+    NSUInteger count = 0;
+    NSMutableArray *temp = [NSMutableArray array];
+    for (int j = 0; j < [self.maxDataArray count]; j++) {
+        float sum = 0;
+        for (int i = 0; i < iterations; i++) {
+            if ([self.maxDataArray count] > count + i) {
+                sum += [self.maxDataArray[count + i] floatValue];
+            }
+        }
+        float average = sum / iterations;
+        [temp addObject:[NSNumber numberWithFloat:average]];
+        
+        count++;
+    }
+    
+    return temp;
+}
+
 - (void)saveMaxData
 {
-    NSLog(@"Max data: %@", self.maxData);
+    int iterations = 15;
+    
+    // Take moving average twice for smooth curve
+    self.maxDataArray = [self movingAverage:iterations];
+    //self.maxDataArray = [self movingAverage:5];
+    
+    NSUInteger count = 0;
+    
+    float max = 0;
+    int maxIndex = 0;
+    for (NSNumber *f in self.maxDataArray) {
+        if ([f floatValue] > max) {
+            max = [f floatValue];
+            maxIndex = count;
+        }
+        count++;
+    }
+    
+    // Get index where slope stops increasing left of max
+    NSArray *left = [self.soundAnalysis leftBoundWithGraph:self.maxDataArray max:max maxIndex:maxIndex];
+    int leftBound = [left[0] floatValue];
+    float leftValue = [left[1] floatValue];
+    
+    // Get index where slope stops decreasing right of max
+    int rightBound = [self.soundAnalysis rightBoundWithGraph:self.maxDataArray max:max maxIndex:maxIndex left:leftValue];
+    
+    // *** Writes to string with moving average of all values using x iterations defined above
+    // *** Use roller on bottom left of graph to test different moving averages. Change iterations above when happy and uncomment this to permanently change moving average.
+    
+    count = 0;
+    // float sum = 0;
+    //[self.maxData setString:@""];
+    NSMutableString *timeVolumeData = [[NSMutableString alloc] init];
+    for (NSNumber *f in self.maxDataArray) {
+        if (count >= leftBound && count <= rightBound) {
+            /*** Time vs Flow ***/
+            [timeVolumeData appendString:[NSString stringWithFormat:@"%d,%.2f\n", count, [f floatValue]]];
+            
+            /*** Time vs Volume ***/
+            // sum += [f floatValue];
+            // [self.maxData appendString:[NSString stringWithFormat:@"%d,%.2f\n", count, sum]];
+        }
+        
+        count++;
+    }
+    
+    // ** End rewrite
+    
     NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:self.dataPath];
     //[handle seekToEndOfFile];
     [handle truncateFileAtOffset:0];
     
     if (self.isPhone) {
         if (!self.account) {
-            NSLog(@"Account: %@", self.account);
             self.account = [[DBAccountManager sharedManager] linkedAccount];
             
             self.filesystem = [[DBFilesystem alloc] initWithAccount:self.account];
@@ -235,15 +370,27 @@
         DBPath *path = [[DBPath root] childPath:@"data.csv"];
         DBFileInfo *info = [[DBFilesystem sharedFilesystem] fileInfoForPath:path error:nil];
         
+        DBPath *path2 = [[DBPath root] childPath:@"data2.csv"]; // time volume data
+        DBFileInfo *info2 = [[DBFilesystem sharedFilesystem] fileInfoForPath:path2 error:nil];
+        
         DBPath *soundPath = [[DBPath root] childPath:@"sound.caf"];
         DBFileInfo *soundInfo = [[DBFilesystem sharedFilesystem] fileInfoForPath:soundPath error:nil];
         
+        NSLog(@"Writing to Dropbox. Info: %@, info2: %@", info, info2);
         if (!info) {
             DBFile *file = [[DBFilesystem sharedFilesystem] createFile:path error:nil];
             [file writeString:self.maxData error:nil];
         } else {
             DBFile *file = [[DBFilesystem sharedFilesystem] openFile:path error:nil];
             [file writeString:self.maxData error:nil];
+        }
+        
+        if (!info2) {
+            DBFile *file2 = [[DBFilesystem sharedFilesystem] createFile:path2 error:nil];
+            [file2 writeString:timeVolumeData error:nil];
+        } else {
+            DBFile *file2 = [[DBFilesystem sharedFilesystem] openFile:path2 error:nil];
+            [file2 writeString:timeVolumeData error:nil];
         }
         
         if (!soundInfo) {
@@ -257,32 +404,13 @@
         [handle writeData:[self.maxData dataUsingEncoding:NSUTF8StringEncoding]];
     }
     [handle closeFile];
-}
-
-- (void)audioPlayerDidFinishPlaying:(AVAudioPlayer *)player successfully:(BOOL)flag
-{
-    NSLog(@"Audio player did finish playing");
-    [self.recordPauseButton setEnabled:YES];
-    [self.stopButton setEnabled:NO];
-}
-
-- (void)audioPlayerDecodeErrorDidOccur:(AVAudioPlayer *)player error:(NSError *)error
-{
-    NSLog(@"Decode error occurred");
-}
-
-- (void)audioRecorderDidFinishRecording:(AVAudioRecorder *)recorder successfully:(BOOL)flag
-{
-    NSLog(@"Finished recording");
-}
-
-- (void)audioRecorderEncodeErrorDidOccur:(AVAudioRecorder *)recorder error:(NSError *)error
-{
-    NSLog(@"Encode error occurred");
+    
+    self.counter = 0;
+    [self.maxData setString:@""];
+    [self.maxDataArray removeAllObjects];
 }
 
 #pragma mark - FFT
-
 -(void)createFFTWithBufferSize:(float)bufferSize withAudioData:(float*)data
 {
     // Setup the length
@@ -350,12 +478,12 @@
         //}
     }
     
-    if (self.isRecording) {
-        NSLog(@"Max freq: %f", maxFreq);
-        if (maxFreq * (22050 / 256) > 650) {
-            [self.maxData appendString:[NSString stringWithFormat:@"%d,%.2f\n", self.counter, maxFreq * (22050 / 256)]];
-            self.counter++;
-        }
+    if (self.isRecording || [[EZOutput sharedOutput] isPlaying]) {
+        //NSLog(@"Max freq: %f", maxFreq);
+        float hertz = maxFreq * (22050 / 256);
+        [self.maxData appendString:[NSString stringWithFormat:@"%d,%.2f\n", self.counter, hertz]];
+        [self.maxDataArray addObject:[NSNumber numberWithFloat:hertz]];
+        self.counter++;
     }
         
     for(int i=0; i<nOver2; i++) {
@@ -369,9 +497,10 @@
     //[self.maxData appendString:[NSString stringWithFormat:@"%.6f,", *amp]];
     //self.maxData = [NSString stringWithFormat:@"%.6f", *amp];
     
-    // Update the frequency domain plot
-    [self.audioPlot updateBuffer:amp
-                      withBufferSize:nOver2];
+    // Update the frequency domain plot if microphone is active device, otherwise plot update is handled in audioFile:readAudio:withBufferSize:withNumberOfChannels: (for playback of recorded audio)
+    if (self.isRecording) {
+        [self.audioPlot updateBuffer:amp withBufferSize:nOver2];
+    }
 }
 
 @end

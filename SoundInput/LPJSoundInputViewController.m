@@ -102,7 +102,7 @@
         //[self.audioRecorder prepareToRecord];
     }
     
-    self.microphone = [EZMicrophone microphoneWithDelegate:self startsImmediately:YES];
+    self.microphone = [EZMicrophone microphoneWithDelegate:self startsImmediately:NO];
     
     self.audioPlot.backgroundColor = [UIColor colorWithRed:0.4 green:0.349 blue:0.7 alpha:1];
     self.audioPlot.plotType = EZPlotTypeBuffer;
@@ -126,6 +126,7 @@
         // Update time domain plot
         /* [self.audioPlotTime updateBuffer:buffer[0]
                           withBufferSize:bufferSize]; */
+        
         // Setup the FFT if it's not already setup
         if (!_isFFTSetup){
             [self createFFTWithBufferSize:bufferSize withAudioData:buffer[0]];
@@ -170,6 +171,16 @@
 {
     dispatch_async(dispatch_get_main_queue(), ^{
         [self.audioPlot updateBuffer:buffer[0] withBufferSize:bufferSize];
+        
+        // Setup the FFT if it's not already setup
+        if (!_isFFTSetup){
+            [self createFFTWithBufferSize:bufferSize withAudioData:buffer[0]];
+            _isFFTSetup = YES;
+        }
+        
+        // Get the FFT data
+        // buffer[0] accesses the left channel is system is stereo
+        [self updateFFTWithBufferSize:bufferSize withAudioData:buffer[0]];
     });
 }
 
@@ -246,7 +257,9 @@
 
 - (IBAction)startTestTapped:(id)sender
 {
+    self.microphone.microphoneOn = YES;
     [self.timer startTimer];
+    [self.audioRecorder prepareToRecord];
     
     if (!self.audioRecorder.recording) {
         [self.audioRecorder record];
@@ -259,6 +272,7 @@
 
 - (IBAction)stopTestTapped:(id)sender
 {
+    self.microphone.microphoneOn = NO;
     self.startTestButton.enabled = YES;
     self.stopTestButton.enabled = NO;
     self.isRecording = NO;
@@ -268,6 +282,11 @@
     self.timeLabel.text = [NSString stringWithFormat:@"%f sec", [self.timer timeElapsedInSeconds]];
     
     [self saveMaxData];
+}
+
+- (void)audioRecorderDidFinishRecording:(AVAudioRecorder *)recorder successfully:(BOOL)flag
+{
+    NSLog(@"Finished recording");
 }
 
 - (IBAction)toggleRecordingTapped:(id)sender
@@ -285,15 +304,15 @@
     }
 }
 
-- (NSMutableArray *)movingAverage:(int)iterations
+- (NSMutableArray *)movingAverage:(NSArray *)array times:(int)iterations
 {
     NSUInteger count = 0;
     NSMutableArray *temp = [NSMutableArray array];
-    for (int j = 0; j < [self.maxDataArray count]; j++) {
+    for (int j = 0; j < [array count]; j++) {
         float sum = 0;
         for (int i = 0; i < iterations; i++) {
-            if ([self.maxDataArray count] > count + i) {
-                sum += [self.maxDataArray[count + i] floatValue];
+            if ([array count] > count + i) {
+                sum += [array[count + i] floatValue];
             }
         }
         float average = sum / iterations;
@@ -307,14 +326,18 @@
 
 - (void)saveMaxData
 {
-    int iterations = 15;
+    NSLog(@"Time elapsed: %f", [self.timer timeElapsedInSeconds]);
+    NSLog(@"Each interval is %f seconds", [self.timer timeElapsedInSeconds] / [self.maxDataArray count]);
+    
+    int iterations = 5;
     
     // Take moving average twice for smooth curve
-    self.maxDataArray = [self movingAverage:iterations];
+    self.maxDataArray = [self movingAverage: self.maxDataArray times:iterations];
     //self.maxDataArray = [self movingAverage:5];
     
     NSUInteger count = 0;
     
+    // Find the maximum value in the dataset
     float max = 0;
     int maxIndex = 0;
     for (NSNumber *f in self.maxDataArray) {
@@ -328,26 +351,34 @@
     // Get index where slope stops increasing left of max
     NSArray *left = [self.soundAnalysis leftBoundWithGraph:self.maxDataArray max:max maxIndex:maxIndex];
     int leftBound = [left[0] floatValue];
-    float leftValue = [left[1] floatValue];
+    // float leftValue = [left[1] floatValue];
     
     // Get index where slope stops decreasing right of max
-    int rightBound = [self.soundAnalysis rightBoundWithGraph:self.maxDataArray max:max maxIndex:maxIndex left:leftValue];
+    // int rightBound = [self.soundAnalysis rightBoundWithGraph:self.maxDataArray max:max maxIndex:maxIndex left:leftValue];
+    int rightBound = [self.maxDataArray count];
     
     // *** Writes to string with moving average of all values using x iterations defined above
     // *** Use roller on bottom left of graph to test different moving averages. Change iterations above when happy and uncomment this to permanently change moving average.
     
     count = 0;
-    // float sum = 0;
+    float sum = 0;
     //[self.maxData setString:@""];
+    NSMutableString *averagedData = [[NSMutableString alloc] init];
     NSMutableString *timeVolumeData = [[NSMutableString alloc] init];
+    NSMutableString *volumeFlowData =[[NSMutableString alloc] init];
     for (NSNumber *f in self.maxDataArray) {
         if (count >= leftBound && count <= rightBound) {
-            /*** Time vs Flow ***/
-            [timeVolumeData appendString:[NSString stringWithFormat:@"%d,%.2f\n", count, [f floatValue]]];
+            [averagedData appendString:[NSString stringWithFormat:@"%d,%.2f\n", count, [f floatValue]]];
+            
+            /*** Time vs Flow (what?? wrong var name) ***/
+            //[timeVolumeData appendString:[NSString stringWithFormat:@"%d,%.2f\n", count, [f floatValue]]];
             
             /*** Time vs Volume ***/
-            // sum += [f floatValue];
-            // [self.maxData appendString:[NSString stringWithFormat:@"%d,%.2f\n", count, sum]];
+            sum += [f floatValue]; // Volume
+            [timeVolumeData appendString:[NSString stringWithFormat:@"%d,%.2f\n", count, sum]];
+            
+            /*** Volume vs Flow ***/
+            [volumeFlowData appendString:[NSString stringWithFormat:@"%.2f,%.2f\n", sum, [f floatValue]]];
         }
         
         count++;
@@ -370,27 +401,37 @@
         DBPath *path = [[DBPath root] childPath:@"data.csv"];
         DBFileInfo *info = [[DBFilesystem sharedFilesystem] fileInfoForPath:path error:nil];
         
-        DBPath *path2 = [[DBPath root] childPath:@"data2.csv"]; // time volume data
-        DBFileInfo *info2 = [[DBFilesystem sharedFilesystem] fileInfoForPath:path2 error:nil];
+        DBPath *timeVolumePath = [[DBPath root] childPath:@"timeVolume.csv"]; // time volume data
+        DBFileInfo *timeVolumeInfo = [[DBFilesystem sharedFilesystem] fileInfoForPath:timeVolumePath error:nil];
+        
+        DBPath *volumeFlowPath = [[DBPath root] childPath:@"volumeFlow.csv"]; // flow volume data
+        DBFileInfo *volumeFlowInfo = [[DBFilesystem sharedFilesystem] fileInfoForPath:volumeFlowPath error:nil];
         
         DBPath *soundPath = [[DBPath root] childPath:@"sound.caf"];
         DBFileInfo *soundInfo = [[DBFilesystem sharedFilesystem] fileInfoForPath:soundPath error:nil];
         
-        NSLog(@"Writing to Dropbox. Info: %@, info2: %@", info, info2);
         if (!info) {
             DBFile *file = [[DBFilesystem sharedFilesystem] createFile:path error:nil];
-            [file writeString:self.maxData error:nil];
+            [file writeString:averagedData error:nil];
         } else {
             DBFile *file = [[DBFilesystem sharedFilesystem] openFile:path error:nil];
-            [file writeString:self.maxData error:nil];
+            [file writeString:averagedData error:nil];
         }
         
-        if (!info2) {
-            DBFile *file2 = [[DBFilesystem sharedFilesystem] createFile:path2 error:nil];
-            [file2 writeString:timeVolumeData error:nil];
+        if (!timeVolumeInfo) {
+            DBFile *timeVolumeFile = [[DBFilesystem sharedFilesystem] createFile:timeVolumePath error:nil];
+            [timeVolumeFile writeString:timeVolumeData error:nil];
         } else {
-            DBFile *file2 = [[DBFilesystem sharedFilesystem] openFile:path2 error:nil];
-            [file2 writeString:timeVolumeData error:nil];
+            DBFile *timeVolumeFile = [[DBFilesystem sharedFilesystem] openFile:timeVolumePath error:nil];
+            [timeVolumeFile writeString:timeVolumeData error:nil];
+        }
+        
+        if (!volumeFlowInfo) {
+            DBFile *volumeFlowFile = [[DBFilesystem sharedFilesystem] createFile:volumeFlowPath error:nil];
+            [volumeFlowFile writeString:volumeFlowData error:nil];
+        } else {
+            DBFile *volumeFlowFile = [[DBFilesystem sharedFilesystem] openFile:volumeFlowPath error:nil];
+            [volumeFlowFile writeString:volumeFlowData error:nil];
         }
         
         if (!soundInfo) {
@@ -479,7 +520,7 @@
     }
     
     if (self.isRecording || [[EZOutput sharedOutput] isPlaying]) {
-        //NSLog(@"Max freq: %f", maxFreq);
+        NSLog(@"Max freq: %f", maxFreq);
         float hertz = maxFreq * (22050 / 256);
         [self.maxData appendString:[NSString stringWithFormat:@"%d,%.2f\n", self.counter, hertz]];
         [self.maxDataArray addObject:[NSNumber numberWithFloat:hertz]];

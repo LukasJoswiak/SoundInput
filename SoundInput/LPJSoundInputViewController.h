@@ -42,7 +42,7 @@
 @property (nonatomic, strong) NSMutableArray *maxDataArray;
 
 - (void)saveMaxData;
-- (NSMutableArray *)movingAverage:(int)iterations;
+- (NSMutableArray *)movingAverage:(NSArray *)array times:(int)iterations;
 - (void)openFilePathWithFileURL:(NSURL *)url;
 
 @end

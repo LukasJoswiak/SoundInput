@@ -41,6 +41,11 @@
 @property (nonatomic, strong) NSMutableDictionary *magValues;
 @property (nonatomic, strong) NSMutableArray *maxDataArray;
 
+@property (nonatomic) float FEV1;
+@property (nonatomic) float PEF;
+@property (nonatomic) float FVC;
+@property (nonatomic) float ratio;
+
 - (void)saveMaxData;
 - (NSMutableArray *)movingAverage:(NSArray *)array times:(int)iterations;
 - (void)openFilePathWithFileURL:(NSURL *)url;

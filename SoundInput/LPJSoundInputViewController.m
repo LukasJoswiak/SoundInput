@@ -54,6 +54,11 @@
     self.magValues = [[NSMutableDictionary alloc] init];
     self.maxDataArray = [[NSMutableArray alloc] init];
     
+    self.FEV1 = 0; // Forced Expiratory Volume in 1 second (Hertz)
+    self.PEF = 0; // Peak Expiratory Flow (Hertz/sec)
+    self.FVC = 0; // Forced Vital Capacity (Hertz)
+    self.ratio = 0; // FEV1 / FVC
+    
     [self.webView loadRequest:[[NSURLRequest alloc] initWithURL:[NSURL URLWithString:@"https://lukasjoswiak.com/dropbox/"]]];
     
 #if TARGET_IPHONE_SIMULATOR
@@ -86,7 +91,7 @@
                                     [NSNumber numberWithInt:AVAudioQualityMedium], AVEncoderAudioQualityKey,
                                     [NSNumber numberWithInt:16], AVEncoderBitRateKey,
                                     [NSNumber numberWithInt:2], AVNumberOfChannelsKey,
-                                    [NSNumber numberWithFloat:44100.0], AVSampleRateKey, nil];
+                                    [NSNumber numberWithFloat:44100], AVSampleRateKey, nil];
     
     NSError *error = nil;
     
@@ -193,11 +198,8 @@
         [self.audioFile readFrames:frames audioBufferList:audioBufferList bufferSize:&bufferSize eof:&_eof];
         
         if (_eof) {
-            [[EZOutput sharedOutput] stopPlayback];
-            [self.playRecordingButton setTitle:@"Play Recording" forState:UIControlStateNormal];
+            [self.playRecordingButton sendActionsForControlEvents:UIControlEventTouchUpInside];
             [self.audioFile seekToFrame:0];
-            
-            [self saveMaxData];
         }
     }
 }
@@ -284,23 +286,22 @@
     [self saveMaxData];
 }
 
-- (void)audioRecorderDidFinishRecording:(AVAudioRecorder *)recorder successfully:(BOOL)flag
-{
-    NSLog(@"Finished recording");
-}
-
 - (IBAction)toggleRecordingTapped:(id)sender
 {
     if ([[EZOutput sharedOutput] isPlaying]) {
         [sender setTitle:@"Play Recording" forState:UIControlStateNormal];
         [EZOutput sharedOutput].outputDataSource = nil;
         [[EZOutput sharedOutput] stopPlayback];
+        [self.timer stopTimer];
+        
+        self.timeLabel.text = [NSString stringWithFormat:@"%f sec", [self.timer timeElapsedInSeconds]];
         
         [self saveMaxData];
     } else {
         [sender setTitle:@"Stop Recording" forState:UIControlStateNormal];
         [EZOutput sharedOutput].outputDataSource = self;
         [[EZOutput sharedOutput] startPlayback];
+        [self.timer startTimer];
     }
 }
 
@@ -326,14 +327,15 @@
 
 - (void)saveMaxData
 {
-    NSLog(@"Time elapsed: %f", [self.timer timeElapsedInSeconds]);
-    NSLog(@"Each interval is %f seconds", [self.timer timeElapsedInSeconds] / [self.maxDataArray count]);
+    float intervalLengthInSeconds = [self.timer timeElapsedInSeconds] / [self.maxDataArray count];
+    int oneSecondCount = 1 / intervalLengthInSeconds;
+    NSLog(@"Each interval is %f seconds.\n1 second took %d intervals.", intervalLengthInSeconds, oneSecondCount);
     
-    int iterations = 5;
+    //int iterations = 5;
     
     // Take moving average twice for smooth curve
-    self.maxDataArray = [self movingAverage: self.maxDataArray times:iterations];
-    //self.maxDataArray = [self movingAverage:5];
+    //self.maxDataArray = [self movingAverage:self.maxDataArray times:iterations];
+    //self.maxDataArray = [self movingAverage:self.maxDataArray times:5];
     
     NSUInteger count = 0;
     
@@ -353,41 +355,92 @@
     int leftBound = [left[0] floatValue];
     // float leftValue = [left[1] floatValue];
     
+    NSLog(@"One second count: %d, left bound: %d", oneSecondCount, leftBound);
+    oneSecondCount += leftBound; // Interval after one second has passed
+    
     // Get index where slope stops decreasing right of max
     // int rightBound = [self.soundAnalysis rightBoundWithGraph:self.maxDataArray max:max maxIndex:maxIndex left:leftValue];
     int rightBound = [self.maxDataArray count];
     
+    NSLog(@"There are %d intervals\nTotal length: %f seconds", rightBound - leftBound, intervalLengthInSeconds * (rightBound - leftBound));
+    
+    // Get average noise level before test begins
+    count = 0;
+    float sum = 0;
+    for (NSNumber *f in self.maxDataArray) {
+        if (count < leftBound) {
+            sum += [f floatValue];
+            count++;
+        } else {
+            break;
+        }
+    }
+    
+    float average = sum / count;
+    
+    NSLog(@"Average Hz before test begins: %f Hz", average);
+    
+    // Reset FVC
+    self.FVC = 0;
+    
     // *** Writes to string with moving average of all values using x iterations defined above
     // *** Use roller on bottom left of graph to test different moving averages. Change iterations above when happy and uncomment this to permanently change moving average.
     
+    BOOL straightLine = NO;
     count = 0;
-    float sum = 0;
+    sum = 0;
+    float maxFlow = 0;
     //[self.maxData setString:@""];
     NSMutableString *averagedData = [[NSMutableString alloc] init];
     NSMutableString *timeVolumeData = [[NSMutableString alloc] init];
     NSMutableString *volumeFlowData =[[NSMutableString alloc] init];
     for (NSNumber *f in self.maxDataArray) {
-        if (count >= leftBound && count <= rightBound) {
-            [averagedData appendString:[NSString stringWithFormat:@"%d,%.2f\n", count, [f floatValue]]];
+        //if (count >= leftBound && count <= rightBound) {
+            float floatValueAppend = [f floatValue];
+            
+            if (count > maxIndex && floatValueAppend < average) {
+                straightLine = YES;
+            }
+            
+            if (straightLine) {
+                floatValueAppend = average;
+            }
+        
+            [averagedData appendString:[NSString stringWithFormat:@"%d,%.2f\n", count, floatValueAppend]];
             
             /*** Time vs Flow (what?? wrong var name) ***/
             //[timeVolumeData appendString:[NSString stringWithFormat:@"%d,%.2f\n", count, [f floatValue]]];
             
             /*** Time vs Volume ***/
-            sum += [f floatValue]; // Volume
+            sum += floatValueAppend; // Volume
             [timeVolumeData appendString:[NSString stringWithFormat:@"%d,%.2f\n", count, sum]];
             
+            if (count == oneSecondCount) {
+                self.FEV1 = sum;
+            }
+            
             /*** Volume vs Flow ***/
-            [volumeFlowData appendString:[NSString stringWithFormat:@"%.2f,%.2f\n", sum, [f floatValue]]];
-        }
+            [volumeFlowData appendString:[NSString stringWithFormat:@"%.2f,%.2f\n", sum, floatValueAppend]];
+            
+            if (floatValueAppend > maxFlow) {
+                maxFlow = floatValueAppend;
+            }
+            
+            self.FVC += floatValueAppend;
+        //}
         
         count++;
     }
     
     // ** End rewrite
     
+    self.PEF = maxFlow;
+    self.ratio = self.FEV1 / self.FVC;
+    
+    NSLog(@"One second; interval %d", oneSecondCount);
+    NSLog(@"FEV1: %f Hz\nPEF: %f Hz\nFVC: %f Hz\nFEV1 / FVC: %f", self.FEV1, self.PEF, self.FVC, self.ratio);
+    
     NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:self.dataPath];
-    //[handle seekToEndOfFile];
     [handle truncateFileAtOffset:0];
     
     if (self.isPhone) {

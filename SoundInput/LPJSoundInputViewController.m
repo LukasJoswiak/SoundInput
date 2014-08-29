@@ -130,7 +130,7 @@
         //[self.audioRecorder prepareToRecord];
     }
     
-    self.microphone = [EZMicrophone microphoneWithDelegate:self startsImmediately:YES];
+    self.microphone = [EZMicrophone microphoneWithDelegate:self startsImmediately:NO];
     
     self.audioPlot.backgroundColor = [UIColor colorWithRed:0.4 green:0.349 blue:0.7 alpha:1];
     self.audioPlot.plotType = EZPlotTypeBuffer;

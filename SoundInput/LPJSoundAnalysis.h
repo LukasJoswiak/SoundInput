@@ -11,6 +11,6 @@
 @interface LPJSoundAnalysis : NSObject
 
 - (NSArray *)leftBoundWithGraph:(NSMutableArray *)array max:(float)max maxIndex:(int)index;
-- (int)rightBoundWithGraph:(NSMutableArray *)array max:(float)max maxIndex:(int)index left:(float)leftValue;
+- (NSArray *)rightBoundWithGraph:(NSMutableArray *)array max:(float)max maxIndex:(int)index left:(float)leftValue;
 
 @end

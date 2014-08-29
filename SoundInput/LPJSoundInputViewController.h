@@ -50,4 +50,6 @@
 - (NSMutableArray *)movingAverage:(NSArray *)array times:(int)iterations;
 - (void)openFilePathWithFileURL:(NSURL *)url;
 
+- (void)saveFFTData:(float *)data withBufferSize:(int)bufferSize;
+
 @end

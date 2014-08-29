@@ -31,6 +31,15 @@
 
 @property (nonatomic, strong) LPJSoundAnalysis *soundAnalysis;
 
+/*
+@property (nonatomic) float lastdbValue;
+@property (nonatomic) int fftBufIndex;
+@property (nonatomic) float *fftBuf;
+@property (nonatomic) int samplesRemaining;
+ */
+
+// #define FFTLEN 256
+
 @end
 
 @implementation LPJSoundInputViewController
@@ -38,6 +47,9 @@
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    
+    // _fftBuf = (float *)malloc(FFTLEN * sizeof(float));
+    // self.lastdbValue = 0.0;
     
     self.soundAnalysis = [[LPJSoundAnalysis alloc] init];
     
@@ -99,6 +111,17 @@
     [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord error:nil];
     [audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:nil];
     
+    /*
+    NSTimeInterval preferredBufferDuration = 0.0005;
+    NSError *err;
+    [audioSession setPreferredIOBufferDuration:preferredBufferDuration error:&err];
+    NSLog(@"Err: %@", err);
+    NSLog(@"Preferred IO Buffer Duration: %f. Actual duration: %f", [audioSession preferredIOBufferDuration], [audioSession IOBufferDuration]);
+    
+    //[audioSession setPreferredSampleRate:8000.0 error:nil];
+    NSLog(@"Sample rate: %f", [audioSession sampleRate]);
+    */
+        
     self.audioRecorder = [[AVAudioRecorder alloc] initWithURL:self.soundFileURL settings:recordSettings error:&error];
     
     if (error) {
@@ -107,7 +130,7 @@
         //[self.audioRecorder prepareToRecord];
     }
     
-    self.microphone = [EZMicrophone microphoneWithDelegate:self startsImmediately:NO];
+    self.microphone = [EZMicrophone microphoneWithDelegate:self startsImmediately:YES];
     
     self.audioPlot.backgroundColor = [UIColor colorWithRed:0.4 green:0.349 blue:0.7 alpha:1];
     self.audioPlot.plotType = EZPlotTypeBuffer;
@@ -131,6 +154,44 @@
         // Update time domain plot
         /* [self.audioPlotTime updateBuffer:buffer[0]
                           withBufferSize:bufferSize]; */
+        
+        /*
+        // Decibel Calculation.
+        float one       = 1.0;
+        float meanVal   = 0.0;
+        float tiny      = 0.1;
+        vDSP_vsq(buffer[0], 1, buffer[0], 1, bufferSize);
+        vDSP_meanv(buffer[0], 1, &meanVal, bufferSize);
+        vDSP_vdbcon(&meanVal, 1, &one, &meanVal, 1, 1, 0);
+        // Exponential moving average to dB level to only get continous sounds.
+        float currentdb = 1.0 - (fabs(meanVal)/100);
+        if (self.lastdbValue == INFINITY || self.lastdbValue == -INFINITY || isnan(self.lastdbValue)) {
+            self.lastdbValue = 0.0;
+        }
+        float dbValue =   ((1.0 - tiny)*self.lastdbValue) + tiny*currentdb;
+        self.lastdbValue = dbValue;
+        NSLog(@"dbval:  %f",dbValue);
+        */
+        
+        /*
+        // Setup the FFT if it's not already setup
+        int samplestoCopy = fmin(bufferSize, FFTLEN - _fftBufIndex);
+        for ( size_t i = 0; i < samplestoCopy; i++ ) {
+            _fftBuf[_fftBufIndex+i] = buffer[0][i];
+            // NSLog(@"Buffer: %f", buffer[0][i]);
+        }
+        _fftBufIndex        += samplestoCopy;
+        _samplesRemaining    -= samplestoCopy;
+        if (_fftBufIndex == FFTLEN) {
+            if( !_isFFTSetup ){
+                [self createFFTWithBufferSize:FFTLEN withAudioData:_fftBuf];
+                _isFFTSetup = YES;
+            }
+            [self updateFFTWithBufferSize:FFTLEN withAudioData:_fftBuf];
+            _fftBufIndex        = 0;
+            _samplesRemaining   = FFTLEN;
+        }
+         */
         
         // Setup the FFT if it's not already setup
         if (!_isFFTSetup){
@@ -166,9 +227,9 @@
     self.audioPlot.shouldFill = YES;
     self.audioPlot.shouldMirror = YES;
     NSLog(@"Seconds: %.2f", self.audioFile.totalDuration);
-    [self.audioFile getWaveformDataWithCompletionBlock:^(float *waveformData, UInt32 length) {
+    /*[self.audioFile getWaveformDataWithCompletionBlock:^(float *waveformData, UInt32 length) {
         [self.audioPlot updateBuffer:waveformData withBufferSize:length];
-    }];
+    }];*/
 }
 
 // EZAudioFileDelegate
@@ -186,6 +247,25 @@
         // Get the FFT data
         // buffer[0] accesses the left channel is system is stereo
         [self updateFFTWithBufferSize:bufferSize withAudioData:buffer[0]];
+        
+        /*
+        // Setup the FFT if it's not already setup
+        int samplestoCopy = fmin(bufferSize, FFTLEN - _fftBufIndex);
+        for ( size_t i = 0; i < samplestoCopy; i++ ) {
+            _fftBuf[_fftBufIndex+i] = buffer[0][i];
+        }
+        _fftBufIndex        += samplestoCopy;
+        _samplesRemaining    -= samplestoCopy;
+        if (_fftBufIndex == FFTLEN) {
+            if( !_isFFTSetup ){
+                [self createFFTWithBufferSize:FFTLEN withAudioData:_fftBuf];
+                _isFFTSetup = YES;
+            }
+            [self updateFFTWithBufferSize:FFTLEN withAudioData:_fftBuf];
+            _fftBufIndex        = 0;
+            _samplesRemaining   = FFTLEN;
+        }
+         */
     });
 }
 
@@ -270,6 +350,9 @@
     self.startTestButton.enabled = NO;
     self.stopTestButton.enabled = YES;
     self.isRecording = YES;
+    
+    // Run test for 3 seconds to test number of loops
+    // [NSTimer scheduledTimerWithTimeInterval:3 target:self selector:@selector(stopTestTapped:) userInfo:nil repeats:NO];
 }
 
 - (IBAction)stopTestTapped:(id)sender
@@ -329,13 +412,13 @@
 {
     float intervalLengthInSeconds = [self.timer timeElapsedInSeconds] / [self.maxDataArray count];
     int oneSecondCount = 1 / intervalLengthInSeconds;
-    NSLog(@"Each interval is %f seconds.\n1 second took %d intervals.", intervalLengthInSeconds, oneSecondCount);
+    NSLog(@"There were %d intervals\nEach interval is %f seconds.\n1 second took %d intervals.", [self.maxDataArray count], intervalLengthInSeconds, oneSecondCount);
     
-    //int iterations = 5;
+    int iterations = 15;
     
     // Take moving average twice for smooth curve
-    //self.maxDataArray = [self movingAverage:self.maxDataArray times:iterations];
-    //self.maxDataArray = [self movingAverage:self.maxDataArray times:5];
+    self.maxDataArray = [self movingAverage:self.maxDataArray times:iterations];
+    // self.maxDataArray = [self movingAverage:self.maxDataArray times:5];
     
     NSUInteger count = 0;
     
@@ -345,7 +428,7 @@
     for (NSNumber *f in self.maxDataArray) {
         if ([f floatValue] > max) {
             max = [f floatValue];
-            maxIndex = count;
+            maxIndex = (float)count;
         }
         count++;
     }
@@ -353,16 +436,23 @@
     // Get index where slope stops increasing left of max
     NSArray *left = [self.soundAnalysis leftBoundWithGraph:self.maxDataArray max:max maxIndex:maxIndex];
     int leftBound = [left[0] floatValue];
-    // float leftValue = [left[1] floatValue];
+    float leftValue = [left[1] floatValue];
+    float leftMinSlope = [left[2] floatValue]; // slope of first two data points, used to calculate slope of line to connect to zero Hz
     
     NSLog(@"One second count: %d, left bound: %d", oneSecondCount, leftBound);
     oneSecondCount += leftBound; // Interval after one second has passed
     
     // Get index where slope stops decreasing right of max
-    // int rightBound = [self.soundAnalysis rightBoundWithGraph:self.maxDataArray max:max maxIndex:maxIndex left:leftValue];
-    int rightBound = [self.maxDataArray count];
+    NSArray *right = [self.soundAnalysis rightBoundWithGraph:self.maxDataArray max:max maxIndex:maxIndex left:leftValue];
+    int rightBound = [right[0] floatValue];
+    // int rightBound = (int)[self.maxDataArray count];
+    float rightMinSlope = [right[1] floatValue];
+    
+    NSLog(@"Right min slope: %f", rightMinSlope);
     
     NSLog(@"There are %d intervals\nTotal length: %f seconds", rightBound - leftBound, intervalLengthInSeconds * (rightBound - leftBound));
+    
+    NSLog(@"\nLeft Bound: %d\nRight Bound: %d", leftBound, rightBound);
     
     // Get average noise level before test begins
     count = 0;
@@ -378,7 +468,7 @@
     
     float average = sum / count;
     
-    NSLog(@"Average Hz before test begins: %f Hz", average);
+    //NSLog(@"Average Hz before test begins: %f Hz", average);
     
     // Reset FVC
     self.FVC = 0;
@@ -395,7 +485,7 @@
     NSMutableString *timeVolumeData = [[NSMutableString alloc] init];
     NSMutableString *volumeFlowData =[[NSMutableString alloc] init];
     for (NSNumber *f in self.maxDataArray) {
-        //if (count >= leftBound && count <= rightBound) {
+        if (count >= leftBound && count <= rightBound) {
             float floatValueAppend = [f floatValue];
             
             if (count > maxIndex && floatValueAppend < average) {
@@ -403,17 +493,17 @@
             }
             
             if (straightLine) {
-                floatValueAppend = average;
+                //floatValueAppend = average;
             }
-        
-            [averagedData appendString:[NSString stringWithFormat:@"%d,%.2f\n", count, floatValueAppend]];
+            
+            [averagedData appendString:[NSString stringWithFormat:@"%lu,%.2f\n", (unsigned long)count, floatValueAppend]];
             
             /*** Time vs Flow (what?? wrong var name) ***/
             //[timeVolumeData appendString:[NSString stringWithFormat:@"%d,%.2f\n", count, [f floatValue]]];
             
             /*** Time vs Volume ***/
             sum += floatValueAppend; // Volume
-            [timeVolumeData appendString:[NSString stringWithFormat:@"%d,%.2f\n", count, sum]];
+            [timeVolumeData appendString:[NSString stringWithFormat:@"%lu,%.2f\n", (unsigned long)count, sum]];
             
             if (count == oneSecondCount) {
                 self.FEV1 = sum;
@@ -427,9 +517,34 @@
             }
             
             self.FVC += floatValueAppend;
-        //}
+        }
         
         count++;
+    }
+    
+    float increase = 1;
+    int pos = leftBound;
+    float leftPoint = [self.maxDataArray[leftBound] floatValue];
+    NSLog(@"Left bound: %d\nLeft point: %f", leftBound, leftPoint);
+    for (float i = leftPoint; i >= 0; i -= leftMinSlope) {
+        NSLog(@"I: %f\nPos: %d", i, pos);
+        [averagedData insertString:[NSString stringWithFormat:@"%d,%.6f\n", pos, i * increase] atIndex:0];
+        leftBound = pos;
+        pos--;
+        increase += 0.02; // slightly concave down instead of linear
+    }
+    NSLog(@"New left bound: %d", leftBound);
+    
+    increase = 1;
+    pos = rightBound;
+    float rightPoint = [self.maxDataArray[rightBound] floatValue];
+    NSLog(@"Right point: %f\nRight min slope: %f", rightPoint, rightMinSlope);
+    for (float i = rightPoint; i >= 0; i -= rightMinSlope) {
+        NSLog(@"I: %f\nPos: %d", i, pos);
+        [averagedData appendString:[NSString stringWithFormat:@"%d,%.6f\n", pos, i * increase]];
+        rightBound = pos;
+        pos++;
+        increase -= 0.01; // slightly concave up instead of linear
     }
     
     // ** End rewrite
@@ -437,8 +552,8 @@
     self.PEF = maxFlow;
     self.ratio = self.FEV1 / self.FVC;
     
-    NSLog(@"One second; interval %d", oneSecondCount);
-    NSLog(@"FEV1: %f Hz\nPEF: %f Hz\nFVC: %f Hz\nFEV1 / FVC: %f", self.FEV1, self.PEF, self.FVC, self.ratio);
+    //NSLog(@"One second; interval %d", oneSecondCount);
+    //NSLog(@"FEV1: %f Hz\nPEF: %f Hz\nFVC: %f Hz\nFEV1 / FVC: %f", self.FEV1, self.PEF, self.FVC, self.ratio);
     
     NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:self.dataPath];
     [handle truncateFileAtOffset:0];
@@ -495,7 +610,7 @@
             [soundFile writeData:[NSData dataWithContentsOfURL:self.soundFileURL] error:nil];
         }
     } else {
-        [handle writeData:[self.maxData dataUsingEncoding:NSUTF8StringEncoding]];
+        [handle writeData:[averagedData dataUsingEncoding:NSUTF8StringEncoding]];
     }
     [handle closeFile];
     
@@ -507,6 +622,7 @@
 #pragma mark - FFT
 -(void)createFFTWithBufferSize:(float)bufferSize withAudioData:(float*)data
 {
+    NSLog(@"Received buffer size: %f", bufferSize);
     // Setup the length
     _log2n = log2f(bufferSize);
     
@@ -530,6 +646,7 @@
 
 -(void)updateFFTWithBufferSize:(float)bufferSize withAudioData:(float*)data
 {
+    //NSLog(@"Buffer size: %f", bufferSize);
     // For an FFT, numSamples must be a power of 2, i.e. is always even
     int nOver2 = bufferSize / 2;
     
@@ -556,11 +673,10 @@
         //maxMag = mag > maxMag ? mag : maxMag;
         
         if (mag > maxMag) {
-            //NSLog(@"Max freq: %d", i);
             maxMag = mag;
             maxFreq = i;
         }
-        
+
         //[self.maxData appendString:[NSString stringWithFormat:@"%.6f,", maxMag]];
         //[self.maxData setString:[NSString stringWithFormat:@"%.6f", maxMag]];
         //[self.magValues setValue:[NSString stringWithFormat:@"%.6f", maxMag] forKeyPath:[NSString stringWithFormat:@"%d", i]];
@@ -573,27 +689,53 @@
     }
     
     if (self.isRecording || [[EZOutput sharedOutput] isPlaying]) {
-        NSLog(@"Max freq: %f", maxFreq);
+        //NSLog(@"Max freq: %f", maxFreq);
         float hertz = maxFreq * (22050 / 256);
         [self.maxData appendString:[NSString stringWithFormat:@"%d,%.2f\n", self.counter, hertz]];
         [self.maxDataArray addObject:[NSNumber numberWithFloat:hertz]];
         self.counter++;
     }
-        
-    for(int i=0; i<nOver2; i++) {
+    
+    //[self saveFFTData:amp withBufferSize:nOver2];
+    
+    for (int i=0; i<nOver2; i++) {
         // Calculate the magnitude
         float mag = _A.realp[i]*_A.realp[i]+_A.imagp[i]*_A.imagp[i];
         // Bind the value to be less than 1.0 to fit in the graph
         amp[i] = [EZAudio MAP:mag leftMin:0.0 leftMax:maxMag rightMin:0.0 rightMax:1.0];
-        
     }
-    
+     
     //[self.maxData appendString:[NSString stringWithFormat:@"%.6f,", *amp]];
     //self.maxData = [NSString stringWithFormat:@"%.6f", *amp];
     
+    /*
+    for (int i = 0; i < sizeof(amp); i++) {
+        [self.maxData appendString:[NSString stringWithFormat:@"%d,%f\n", self.counter, amp[i]]];
+        [self.maxDataArray addObject:[NSNumber numberWithFloat:amp[i]]];
+        self.counter++;
+    }
+     */
+    
     // Update the frequency domain plot if microphone is active device, otherwise plot update is handled in audioFile:readAudio:withBufferSize:withNumberOfChannels: (for playback of recorded audio)
-    if (self.isRecording) {
+    //if (self.isRecording || [[EZOutput sharedOutput] isPlaying]) {
         [self.audioPlot updateBuffer:amp withBufferSize:nOver2];
+    //}
+    
+    //[self saveFFTData:amp withBufferSize:nOver2];
+}
+
+int abc = 0;
+
+- (void)saveFFTData:(float *)data withBufferSize:(int)bufferSize
+{
+    NSLog(@"New loop: %d", abc);
+    abc++;
+    for (int i = 0; i < bufferSize; i++) {
+        //NSLog(@"I: %d, Data: %f", i, data[i]);
+        data[i] = i == 0 ? 0 : data[i];
+        [self.maxData appendString:[NSString stringWithFormat:@"%d,%f\n", self.counter, data[i]]];
+        [self.maxDataArray addObject:[NSNumber numberWithFloat:data[i]]];
+        self.counter++;
     }
 }
 

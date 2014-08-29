@@ -1,6 +1,6 @@
 SoundInput
 ==========
 
-Performs real time FFT on microphone input.
+Performs real time FFT on microphone input or recorded audio file.
 
-![Screenshot of App](http://i.imgur.com/pKDLmd5.png)
+![Screenshot of App](http://i.imgur.com/rPSW90B.png)
